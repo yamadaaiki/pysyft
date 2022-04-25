@@ -49,8 +49,48 @@ test_loader = torch.utils.data.Data.DataLoader(
     ])),
     batch_size=args.test_batch_size, shuffle=True, **kwargs)
 
+def training(args, model, device, federated_train_loader, optimizer, epoch):
+    model.train()
 
+    for batch_idx, (data, target) in enumerate(federated_train_loader):
+        model.send(data.location)
+        data, target = data.to(device), target,to(device)
+        optimizer.zero_grad()
+        output = model(data)
+        loss = F.nll_loss
+        loss.backward()
+        optimizer.step()
+        model.get()
+        if batch_idx % args.log_interval == 0:
+            loss = loss.get()
+            print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format(
+                epoch, batch_idx * args.batch_size, len(federated_train_loader) * args.batch_size,
+                100. * batch_idx / len(federated_train_loader), loss.item()))
 
+def test(args, model, device, test_loadere):
+    model.eval()
+    test_loss = 0
+    correct = 0
+    with torch.no_grad():
+        for data, target in test_loader:
+            data, target = data.to(device), target.to(device)
+            output = model(data)
+            test_loss += F.nll_loss(output, target, reduction="sum").item()
+            pred = output.argmax(1, keepdim=True)
+            correct += pred.eq(target.view_as(pred)).sum().item()
 
+    test_loss /= len(test_loader.dataset)
 
+    print('\nTest set: Average loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format(
+        test_loss, correct, len(test_loader.dataset),
+        100. * correct / len(test_loader.dataset)))   
 
+model = Net().to(device)
+optimizer = optim.SGD(model.parameters(), lr=args.lr) # TODO momentum is not supported at the moment
+
+for epoch in range(1, args.epochs + 1):
+    training(args, model, device, federated_train_loader, optimizer, epoch)
+    test(args, model, device, test_loader)
+
+if (args.save_model):
+    torch.save(model.state_dict(), "mnist_cnn.pt")
