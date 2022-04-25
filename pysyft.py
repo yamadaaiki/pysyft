@@ -4,6 +4,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torchvision import datasets, transforms
 
+from cnn import Net
 # PySyftをimport
 import syft as sy
 
